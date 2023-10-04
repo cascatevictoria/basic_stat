@@ -1,0 +1,309 @@
+---
+title: "Problem sets: basic statistics in R"
+author: "Victoria Bolotova"
+date: "June 24, 2021"
+output: 
+    html_document:
+      theme: cosmo
+      code_folding: show
+      toc: true
+      toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+
+# Problem set 1
+
+There is a dataset about positive and negative comments on news topics about artificial intelligence. 
+To recreate the data, run the code below.
+
+```{r}
+table <- matrix(c(138, 1463, 152, 77, 221, 988, 355, 444, 6, 303, 4347, 589, 222, 922, 3553, 963, 1951, 44), ncol = 2)
+row.names(table) <- c("fiction", "business", "education", "computer games", "human_AI", "cooperation", "military", "mobile", "research")
+colnames(table) <- c("positive", "negative")
+table <- as.data.frame(table)
+```
+
+We would like to know whether the share of positive and negative comments is the same or different across the topics. If it is different, show which topics are treated most positively and negatively (2 points)
+
+```{r}
+chisq.test(table)
+```
+
+From the p-value we can say that there is a statistically significant association between the type of attitude and topics. 
+
+```{r}
+chisq.test(table)$stdres
+```
+
+Topics treated most positively: fiction, business, military
+
+Topics treated most negatively: human_AI, cooperation, mobile
+
+# Problem set 2
+
+There is a dataset on one of the European countries ("exam1210.csv").
+
+_Variables:_
+
+* agdcyngn - Age at which people generally stop being described as young, according to the respondent ("The age of the end of youth")
+
+
+* agdcoldn - Age at which people generally start being described as old, according to the respondent ("The age of getting old")
+
+
+* gndr - respondent's gender
+
+
+* agean - respondent's age in years
+
+
+* eduyrsn - full years of respondent's education
+
+
+* maritala - respondent's marital status
+
+
+* health - respondent's subjective health
+
+
+## Task 1
+
+Look at those respondents whose marital status is 'never married'. What is the lowest age when people start being called old in this country among them? And what is the lowest age when people start being called old among the married respondents? (1 point)
+
+
+```{r}
+library(tidyverse)
+library(foreign)
+#1st way of solution
+data_1 <- read.csv("exam1210.csv")
+
+# know the levels of categorical data
+levels(data_1$maritala)
+
+# transformation of variable's type
+data_1$maritala <- as.factor(data_1$maritala)
+data_1 %>%
+  group_by(data_1$maritala) %>%
+  summarise(min = min(agdcoldn)) %>%
+  arrange(desc(min))
+```
+
+
+```{r}
+#2nd way of solution
+data_nevermarried <- data_1 %>%
+  filter(maritala == "Never married and never in civil partnership")
+
+min(data_nevermarried$agdcoldn)
+
+data_married <- data_1 %>%
+  filter(maritala == "Married")
+
+min(data_married$agdcoldn)
+```
+
+What is the lowest age when people start being called old in this country among them? 30
+And what is the lowest age when people start being called old among the married respondents? 25
+
+## Task 2
+
+
+**Check homogeneity of variances**
+
+```{r}
+library(car)
+leveneTest(data_1$agdcyngn ~ data_1$maritala)
+```
+
+P-value is equal to 0.1 -> we cannot reject the null hypothesis, which means that variances are equal.
+
+**Check normality of residuals**
+
+```{r}
+library(psych)
+aov.out <- aov(data_1$agdcyngn ~ data_1$maritala)
+describe(residuals(aov.out))
+```
+
+Both skew and kurtosis indicate normal distribution
+
+```{r include=TRUE, message=FALSE, warning=FALSE}
+hist(residuals(aov.out))
+```
+
+* Residuals are normally distributed
+* Variances are equal according to p-value
+* => I should use aov()
+
+```{r}
+aov <- aov(data_1$agdcyngn ~ data_1$maritala)
+summary(aov)
+```
+
+
+We see that the p-value is less than 0.05, which means that we reject the null hypothesis. Thus, at least one mean is different.
+
+However, for now, we do not know which pairs are exactly different because ANOVA is an omnibus test as it tests for overall differences between groups.
+
+That is why we should run a follow-up, post hoc test.
+
+Tukey's test is used when variances are equal.
+
+```{r}
+TukeyHSD(aov)
+```
+
+```{r}
+library(sjstats)
+anova_stats(aov.out)
+```
+
+* Omega-squared equals to 0.11, which means that effect size is medium.
+
+Make a plot showing the difference in the age of the end of youth for all marital statuses (1 point)
+
+```{r}
+par(mar = c(2, 20, 2, 2))
+plot(TukeyHSD(aov), las = 2)
+```
+
+## Task 3
+
+
+Do the 'age when youth ends' and the 'age when people start being called old' change in the same direction? Find out and report the correlation between the two (1 point)
+
+```{r}
+ggplot(data_1, aes(agdcyngn)) + 
+  geom_histogram(binwidth = 5, fill = "blue", col= "blue", alpha = 0.5) +
+  ggtitle("Distribution of respondents' estimation of age when youth ends") + 
+  xlab("age when youth ends") +
+  theme_classic()
+```
+
+From the histogram we can say that distribution is normal for the `age when youth ends` variable. 
+```{r}
+library(psych)
+data_1$agdcyngn <- as.numeric(as.character(data_1$agdcyngn))
+describe(data_1$agdcyngn, na.rm = TRUE)
+```
+
+Both skew (0.02) and kurtosis (-0.46) indicate normal distribution. 
+
+```{r}
+ggplot(data_1, aes(agdcoldn)) + 
+  geom_histogram(binwidth = 5, fill = "blue", col= "blue", alpha = 0.5) +
+  ggtitle("Distribution of respondents' estimation of age when people start being called old") + 
+  xlab("age when people start being called old") +
+  theme_classic()
+```
+
+This histogram also shows normal distribution for variable `age when people start being called old`.
+
+```{r}
+data_1$agdcoldn <- as.numeric(as.character(data_1$agdcoldn))
+library(psych)
+describe(data_1$agdcoldn)
+```
+
+Here also both skew (-0.08) and kurtosis (0.45) indicate normal distribution. 
+
+* As both variables have normal distribution and both are of rational type of measurement, I should use Pearson product moment coefficient.
+
+
+```{r}
+data_cor <- data_1 %>%
+  select(agdcyngn, agdcoldn)
+```
+
+
+
+```{r}
+# only Pearson correlation is shown
+cor(data_cor, use = "complete.obs")
+```
+
+```{r}
+# only Pearson correlation is shown
+data_cor <- data_1 %>%
+  select(agdcyngn, agdcoldn)
+cor(data_cor, method = "spearman", use = "complete.obs")
+```
+
+```{r}
+data_1$agdcyngn <- as.numeric(as.character(data_1$agdcyngn))
+data_1$agdcoldn <- as.numeric(as.character(data_1$agdcoldn))
+# Pearson's product-moment correlation with p-value
+cor.test(data_1$agdcyngn, data_1$agdcoldn)
+```
+
+
+```{r}
+# Spearman's rank correlation 
+cor.test(data_1$agdcyngn, data_1$agdcoldn, method = "spearman")
+```
+
+Correlation is 0.48 according to parametric and non-paramentric tests. 
+
+* Yes, they change in the same direction. The correlation between `age when youth ends` and the `age when people start being called old` is statistically significant and equals to 0.48, which is a moderate positive relationship.
+
+
+Show a correlation matrix between three variables: `agdcyngn`, `agdcoldn`, and `agean` (1 point)
+
+```{r}
+data_1$agean <- as.numeric(as.character(data_1$agean))
+describe(data_1$agean)
+```
+
+The variable `agean` is normally distributed. 
+
+```{r}
+data_cor2 <- data_1 %>%
+  select(agdcyngn, agdcoldn, agean)
+cor(data_cor2, use = "complete.obs")
+```
+
+
+* All correlations are positive and moderate by size.
+
+
+## Task 4
+
+
+Create a model that predicts the 'age when youth ends' by age, gender,and health of the respondent. Add predictors one by one, and compare the model fit of three nested models (1 point)
+
+```{r}
+data_1$gndr <- as.factor(data_1$gndr)
+data_1$health <- as.factor(data_1$health)
+model1 <- lm(agdcyngn ~ agean, data = data_1)
+model2 <- lm(agdcyngn ~ agean + gndr, data = data_1)
+model3 <- lm(agdcyngn ~ agean + gndr + health, data = data_1)
+anova(model1, model2, model3)
+```
+
+* The second model is significantly better fits the data than model one, while model three is significantly better than second model. 
+
+* Model three fits best
+
+Report how good your model is. Interpret the relationship between each predictor and the outcome (1 point)
+
+```{r}
+summary(model3)
+```
+
+* The model of best fit describes 20 % of variance in `age when youth ends`.
+
+* Intercept is not meaningful here as age cannot equal to 0, so we should not interpret it.
+
+* One year of age is associated with on average a 0.3 increase in `age when youth ends`, holding everything else constant.  
+
+* If the person is a male, he describes a person not young anymore 1.55 years earlier on average than female, holding everything else constant.
+
+* HealthFair and HealthGood are not statistically significant, so we should not interpret them.
+
+* If the health of a person is very good, his estimation of `age when youth ends` increases on average by 3.8 units, compared to the person with bad health (reference category), holding everything else constant.
+
+
